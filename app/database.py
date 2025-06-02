@@ -26,7 +26,6 @@ SSL_CA_PATH = os.getenv("SSL_CA_PATH")
 if all([DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD]):
     DATABASE_URL = (
         f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-        "?ssl_mode=REQUIRED"
     )
     logger.info("✅ DATABASE_URL constructed from individual environment variables")
 else:
@@ -50,20 +49,7 @@ try:
     if not DATABASE_URL:
         raise ValueError("Database configuration is incomplete")
     
-    logger.info("🔗 Creating database engine with SSL support")
-
-    # DATABASE_URLのクエリ削除版を作成
-    parsed_url = urlparse(DATABASE_URL)
-    clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-
-    # クエリパラメータ解析
-    ssl_enabled = False
-    ssl_mode = None
-    if parsed_url.query:
-        query_params = parse_qs(parsed_url.query)
-        if 'ssl_mode' in query_params:
-            ssl_mode = query_params['ssl_mode'][0]
-            ssl_enabled = ssl_mode.upper() in ['REQUIRED', 'PREFERRED']
+    logger.info("🔗 Creating database engine with Azure MySQL SSL support")
 
     # SQLAlchemy接続引数
     engine_args = {
@@ -72,26 +58,25 @@ try:
         "pool_recycle": 3600
     }
 
-    if ssl_enabled:
-        logger.info(f"🔒 Configuring SSL connection (mode: {ssl_mode})")
-        ssl_config = {}
-        if SSL_CA_PATH and os.path.exists(SSL_CA_PATH):
-            logger.info(f"🔒 Using SSL certificate file: {SSL_CA_PATH}")
-            ssl_config = {
-                "ca": SSL_CA_PATH,
-                "check_hostname": False  
-            }
+    # Azure MySQL用SSL設定
+    ssl_config = {
+        "ssl_disabled": False,
+        "ssl_verify_cert": False,  # 証明書検証を無効化
+        "ssl_verify_identity": False,  # ID検証を無効化
+    }
 
-        engine_args["connect_args"] = {
-            "ssl": ssl_config
-        }
-        url_to_use = clean_url  # ssl_modeのクエリ削除
+    # SSL証明書ファイルが存在する場合は使用
+    if SSL_CA_PATH and os.path.exists(SSL_CA_PATH):
+        logger.info(f"🔒 Using SSL certificate file: {SSL_CA_PATH}")
+        ssl_config["ssl_ca"] = SSL_CA_PATH
+        # ファイルがある場合でも検証は無効のまま（Azure MySQL用）
     else:
-        url_to_use = DATABASE_URL
+        logger.info("🔒 Using SSL without certificate file verification")
 
+    engine_args["connect_args"] = ssl_config
 
     # エンジン作成
-    engine = create_engine(url_to_use, **engine_args)
+    engine = create_engine(DATABASE_URL, **engine_args)
     logger.info("✅ Database engine created successfully")
 
     # テスト接続
