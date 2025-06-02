@@ -44,6 +44,10 @@ def get_transaction_details(transaction_id: int, db: Session = Depends(get_db)):
         models.TransactionDetail.TRD_ID == transaction_id
     ).all()
     
+    # 明細データが存在するかチェック
+    if not details_with_tax:
+        raise HTTPException(status_code=404, detail="Transaction details not found")
+    
     items = []
     total_excl_tax = 0
     total_tax = 0
