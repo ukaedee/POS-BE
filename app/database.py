@@ -14,12 +14,13 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# 個別の環境変数から取得
+# 環境変数の取得
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT")
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
+SSL_CA_PATH = os.getenv("SSL_CA_PATH")
 
 # DATABASE_URLを構築
 if all([DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD]):
@@ -29,12 +30,10 @@ if all([DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD]):
     )
     logger.info("✅ DATABASE_URL constructed from individual environment variables")
 else:
-    # フォールバック: 元のDATABASE_URL環境変数を使用
     DATABASE_URL = os.getenv("DATABASE_URL")
     logger.info("⚠️ Using fallback DATABASE_URL environment variable")
 
-SSL_CA_PATH = os.getenv("SSL_CA_PATH")
-
+# ログ出力
 logger.info("🔧 Database configuration:")
 logger.info(f"  DB_HOST: {DB_HOST if DB_HOST else 'Not set'}")
 logger.info(f"  DB_PORT: {DB_PORT if DB_PORT else 'Not set'}")
@@ -44,112 +43,80 @@ logger.info(f"  DB_PASSWORD: {'***' if DB_PASSWORD else 'Not set'}")
 logger.info(f"  DATABASE_URL: {DATABASE_URL[:60] if DATABASE_URL else 'Not set'}...")
 logger.info(f"  SSL_CA_PATH: {SSL_CA_PATH if SSL_CA_PATH else 'Not set'}")
 
-# Azure App Service用の設定
+# SQLAlchemyエンジン作成
 engine = None
 
 try:
     if not DATABASE_URL:
-        logger.error(f"❌ DATABASE_URL: {DATABASE_URL.split('@')[0]}@[REDACTED]")
         raise ValueError("Database configuration is incomplete")
     
-    logger.info("🔗 Creating database engine with ssl_mode=REQUIRED configuration")
-    
-    # DATABASE_URLからクエリパラメータを確認
+    logger.info("🔗 Creating database engine with SSL support")
+
+    # DATABASE_URLのクエリ削除版を作成
     parsed_url = urlparse(DATABASE_URL)
     clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-    
-    # クエリパラメータをチェック
+
+    # クエリパラメータ解析
     ssl_enabled = False
     ssl_mode = None
     if parsed_url.query:
-        logger.info(f"🔍 URL query parameters: {parsed_url.query}")
         query_params = parse_qs(parsed_url.query)
-        
-        # ssl_mode パラメータをチェック
         if 'ssl_mode' in query_params:
             ssl_mode = query_params['ssl_mode'][0]
-            logger.info(f"🔒 SSL mode from URL: {ssl_mode}")
             ssl_enabled = ssl_mode.upper() in ['REQUIRED', 'PREFERRED']
-        elif 'ssl' in query_params:
-            ssl_enabled = query_params.get('ssl', ['false'])[0].lower() == 'true'
-            logger.info(f"🔒 SSL enabled from URL: {ssl_enabled}")
-    
-    logger.info(f"🔗 Clean DATABASE_URL: {clean_url[:60]}...")
-    
-    # ENGINE設定を構築
+
+    # SQLAlchemy接続引数
     engine_args = {
         "echo": False,
         "pool_pre_ping": True,
         "pool_recycle": 3600
     }
-    
-    # SSLが必要な場合の設定
+
     if ssl_enabled:
-        logger.info(f"🔒 Configuring SSL connection (mode: {ssl_mode or 'enabled'})")
-        # PyMySQLの基本的なSSL設定
+        logger.info(f"🔒 Configuring SSL connection (mode: {ssl_mode})")
         ssl_config = {}
-        
-        # ssl_mode=REQUIREDの場合
-        if ssl_mode and ssl_mode.upper() == 'REQUIRED':
-            logger.info("🔒 Using SSL REQUIRED mode")
-            # 最小限のSSL設定でSSLを強制
-            ssl_config = {
-                "ssl_disabled": False
-            }
-        else:
-            # 通常のSSL設定
-            ssl_config = {
-                "ssl_disabled": False,
-                "ssl_verify_cert": False,
-                "ssl_verify_identity": False
-            }
-        
-        # SSL証明書ファイルがある場合
         if SSL_CA_PATH and os.path.exists(SSL_CA_PATH):
             logger.info(f"🔒 Using SSL certificate file: {SSL_CA_PATH}")
-            ssl_config["ssl_ca"] = SSL_CA_PATH
-            ssl_config["ssl_verify_cert"] = True
-        
-        engine_args["connect_args"] = ssl_config
-        
-        # URLからssl_modeパラメータを除去してクリーンなURLを使用
-        url_to_use = clean_url
+            ssl_config["ca"] = SSL_CA_PATH
+
+        engine_args["connect_args"] = {
+            "ssl": ssl_config
+        }
+        url_to_use = clean_url  # ssl_modeのクエリ削除
     else:
-        logger.info("🔗 Using connection without explicit SSL configuration")
         url_to_use = DATABASE_URL
-    
-    # エンジンを作成
+
+    # エンジン作成
     engine = create_engine(url_to_use, **engine_args)
-    
     logger.info("✅ Database engine created successfully")
-    
-    # 接続テスト（オプション - 起動時のエラーを避けるため）
+
+    # テスト接続
     try:
         logger.info("🧪 Testing database connection...")
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1 as test")
+            result = conn.execute("SELECT 1 AS test")
             logger.info("✅ Database connection test successful")
     except Exception as conn_error:
         logger.warning(f"⚠️ Database connection test failed: {conn_error}")
         logger.warning("⚠️ Will retry during first request")
-    
+
 except Exception as e:
     logger.error(f"❌ Failed to create database engine: {e}")
     logger.error(f"❌ DATABASE_URL: {DATABASE_URL}")
     logger.error(f"❌ Error type: {type(e)}")
-    # エンジン作成に失敗してもアプリケーションは起動させる（デバッグのため）
     logger.error("❌ Creating dummy engine for debugging...")
     try:
-        # SQLiteのダミーエンジンを作成（デバッグ用）
         engine = create_engine("sqlite:///:memory:", echo=False)
         logger.warning("⚠️ Using in-memory SQLite for debugging")
     except:
         logger.error("❌ Failed to create any database engine")
         engine = None
 
+# セッション設定
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# DBセッション生成関数
 def get_db():
     logger.debug("📡 Creating database session")
     db = SessionLocal()
