@@ -59,38 +59,13 @@ def root():
         "message": "POS API is running",
         "status": "ok",
         "endpoints": {
-            "health": "/health",
             "products": "/products",
             "purchase": "/purchase",
             "transactions": "/transactions/{id}"
         }
     }
 
-@app.get("/health")
-def health_check():
-    """ヘルスチェックエンドポイント（DB接続テスト付き）"""
-    logger.info("🏥 Health check requested")
-    try:
-        # データベース接続テスト
-        db = next(get_db())
-        # 簡単なクエリでDB接続を確認
-        result = db.execute(text("SELECT 1 as test")).fetchone()
-        db.close()
-        
-        logger.info("✅ Health check passed - DB connection OK")
-        return {
-            "status": "healthy",
-            "database": "connected",
-            "message": "POS API is running"
-        }
-    except Exception as e:
-        logger.error(f"❌ Health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "database": "disconnected", 
-            "error": str(e),
-            "message": "POS API has issues"
-        }
+
 
 @app.get("/products", response_model=List[schemas.Product])
 def get_all_products(db: Session = Depends(get_db)):
