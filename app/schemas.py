@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 from datetime import datetime
 
 # Product関連
@@ -18,10 +18,10 @@ class Product(ProductBase):
 # Purchase関連
 class PurchaseItem(BaseModel):
     prd_code: str
-    qty: int
+    qty: int = Field(ge=1, description="数量は1以上である必要があります")
 
 class PurchaseRequest(BaseModel):
-    emp_cd: str
+    emp_cd: Optional[str] = None
     items: List[PurchaseItem]
 
 class TransactionDetailResponse(BaseModel):
@@ -47,4 +47,20 @@ class TransactionResponse(BaseModel):
     details: List[TransactionDetailResponse]
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+# トランザクション詳細取得用スキーマ
+class TransactionItemDetail(BaseModel):
+    name: str
+    unit_price: int
+    quantity: int
+    tax_rate: float
+    tax_amount: int
+    price_incl_tax: int
+
+class TransactionDetailWithTotals(BaseModel):
+    transaction_id: int
+    items: List[TransactionItemDetail]
+    total_excl_tax: int
+    total_tax: int
+    total_incl_tax: int 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, CHAR, VARCHAR, TIMESTAMP
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, CHAR, VARCHAR, TIMESTAMP, DECIMAL
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -13,6 +13,12 @@ class Product(Base):
     NAME = Column(VARCHAR(50), nullable=False)
     PRICE = Column(Integer, nullable=False)
     STOCK = Column(Integer, nullable=False)
+
+class TaxMaster(Base):
+    __tablename__ = "tax_master"
+
+    TAX_CD = Column(CHAR(2), primary_key=True)
+    TAX_RATE = Column(DECIMAL(5, 2), nullable=False)
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -38,8 +44,9 @@ class TransactionDetail(Base):
     PRD_NAME = Column(VARCHAR(50), nullable=False)
     PRD_PRICE = Column(Integer, nullable=False)
     QTY = Column(Integer, nullable=False)
-    TAX_CD = Column(CHAR(2), nullable=False)
+    TAX_CD = Column(CHAR(2), ForeignKey("tax_master.TAX_CD"), nullable=False)
     
     # リレーション
     transaction = relationship("Transaction", back_populates="details")
-    product = relationship("Product") 
+    product = relationship("Product")
+    tax_master = relationship("TaxMaster") 
