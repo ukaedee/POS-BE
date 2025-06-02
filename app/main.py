@@ -2,6 +2,7 @@ import logging
 import sys
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List
 import os
 
@@ -43,7 +44,7 @@ async def startup_event():
         # より安全なインポート
         import app.database as db_module
         with db_module.engine.connect() as conn:
-            result = conn.execute("SELECT 1 as test").fetchone()
+            result = conn.execute(text("SELECT 1 as test")).fetchone()
             logger.info("✅ Database connection successful")
     except ImportError as e:
         logger.error(f"❌ Database module import failed: {e}")
@@ -73,7 +74,7 @@ def health_check():
         # データベース接続テスト
         db = next(get_db())
         # 簡単なクエリでDB接続を確認
-        result = db.execute("SELECT 1 as test").fetchone()
+        result = db.execute(text("SELECT 1 as test")).fetchone()
         db.close()
         
         logger.info("✅ Health check passed - DB connection OK")
@@ -351,4 +352,4 @@ def debug_info():
             "status": "debug_error",
             "error": str(e),
             "message": "Failed to collect debug information"
-        } 
+        }

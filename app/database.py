@@ -82,8 +82,9 @@ try:
     # テスト接続
     try:
         logger.info("🧪 Testing database connection...")
+        from sqlalchemy import text
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1 AS test")
+            result = conn.execute(text("SELECT 1 AS test"))
             logger.info("✅ Database connection test successful")
     except Exception as conn_error:
         logger.warning(f"⚠️ Database connection test failed: {conn_error}")
