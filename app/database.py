@@ -86,16 +86,23 @@ try:
     # SSLが必要な場合の設定
     if ssl_enabled:
         logger.info(f"🔒 Configuring SSL connection (mode: {ssl_mode or 'enabled'})")
-        # PyMySQLのSSL設定を適切に構成
-        ssl_config = {
-            "ssl_disabled": False,
-            "ssl_verify_cert": False,
-            "ssl_verify_identity": False
-        }
+        # PyMySQLの基本的なSSL設定
+        ssl_config = {}
         
-        # ssl_mode=REQUIREDの場合の追加設定
+        # ssl_mode=REQUIREDの場合
         if ssl_mode and ssl_mode.upper() == 'REQUIRED':
-            ssl_config["ssl_check_hostname"] = False
+            logger.info("🔒 Using SSL REQUIRED mode")
+            # 最小限のSSL設定でSSLを強制
+            ssl_config = {
+                "ssl_disabled": False
+            }
+        else:
+            # 通常のSSL設定
+            ssl_config = {
+                "ssl_disabled": False,
+                "ssl_verify_cert": False,
+                "ssl_verify_identity": False
+            }
         
         # SSL証明書ファイルがある場合
         if SSL_CA_PATH and os.path.exists(SSL_CA_PATH):
@@ -104,11 +111,14 @@ try:
             ssl_config["ssl_verify_cert"] = True
         
         engine_args["connect_args"] = ssl_config
+        
+        # URLからssl_modeパラメータを除去してクリーンなURLを使用
+        url_to_use = clean_url
     else:
         logger.info("🔗 Using connection without explicit SSL configuration")
+        url_to_use = DATABASE_URL
     
-    # エンジンを作成（clean_urlまたは元のURLを使用）
-    url_to_use = DATABASE_URL if not ssl_enabled else clean_url
+    # エンジンを作成
     engine = create_engine(url_to_use, **engine_args)
     
     logger.info("✅ Database engine created successfully")
