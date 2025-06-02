@@ -3,6 +3,7 @@ import sys
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import os
 
 from . import models, schemas
 from .database import get_db
@@ -301,4 +302,53 @@ def create_purchase(purchase_data: schemas.PurchaseRequest, db: Session = Depend
     except Exception as e:
         logger.error(f"❌ Purchase processing failed: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Purchase processing failed: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Purchase processing failed: {str(e)}")
+
+@app.get("/debug")
+def debug_info():
+    """デバッグ情報エンドポイント"""
+    logger.info("🔍 Debug info requested")
+    
+    try:
+        # 環境変数の確認
+        env_vars = {
+            "DATABASE_URL": os.getenv("DATABASE_URL", "Not set")[:50] + "..." if os.getenv("DATABASE_URL") else "Not set",
+            "SSL_CA_PATH": os.getenv("SSL_CA_PATH", "Not set"),
+            "PORT": os.getenv("PORT", "Not set"),
+            "PYTHONPATH": os.getenv("PYTHONPATH", "Not set"),
+            "WEBSITE_HOSTNAME": os.getenv("WEBSITE_HOSTNAME", "Not set")
+        }
+        
+        # システム情報
+        system_info = {
+            "python_version": sys.version,
+            "current_working_directory": os.getcwd(),
+            "python_path": sys.path[:3]  # 最初の3つのパスのみ
+        }
+        
+        # モジュールのインポートテスト
+        import_status = {}
+        modules_to_test = ["sqlalchemy", "pymysql", "fastapi", "uvicorn", "pydantic"]
+        
+        for module in modules_to_test:
+            try:
+                __import__(module)
+                import_status[module] = "✅ OK"
+            except ImportError as e:
+                import_status[module] = f"❌ Failed: {str(e)}"
+        
+        return {
+            "status": "debug_info",
+            "environment_variables": env_vars,
+            "system_info": system_info,
+            "import_status": import_status,
+            "message": "Debug information collected successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Debug info collection failed: {e}")
+        return {
+            "status": "debug_error",
+            "error": str(e),
+            "message": "Failed to collect debug information"
+        } 
