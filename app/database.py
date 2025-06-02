@@ -77,7 +77,10 @@ try:
         ssl_config = {}
         if SSL_CA_PATH and os.path.exists(SSL_CA_PATH):
             logger.info(f"🔒 Using SSL certificate file: {SSL_CA_PATH}")
-            ssl_config["ca"] = SSL_CA_PATH
+            ssl_config = {
+                "ca": SSL_CA_PATH,
+                "check_hostname": False  
+            }
 
         engine_args["connect_args"] = {
             "ssl": ssl_config
@@ -85,6 +88,7 @@ try:
         url_to_use = clean_url  # ssl_modeのクエリ削除
     else:
         url_to_use = DATABASE_URL
+
 
     # エンジン作成
     engine = create_engine(url_to_use, **engine_args)
