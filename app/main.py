@@ -27,13 +27,17 @@ app = FastAPI(title="POS API", description="POS Application Backend API")
 # CORS設定（フロントエンド接続用）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 本番環境では具体的なドメインを指定
+    allow_origins=[
+        "https://app-step4-33.azurewebsites.net",  # フロントエンドドメイン
+        "http://localhost:3000",  # ローカル開発用
+        "http://localhost:3001"   # 追加のローカル開発用
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
-logger.info("✅ CORS middleware enabled - all origins allowed")
+logger.info("✅ CORS middleware configured for frontend domain")
 
 # 設定値
 TAX_RATE = 0.10  # 10%
@@ -72,12 +76,12 @@ def root():
         "status": "ok",
         "endpoints": {
             "products": "/products",
+            "product": "/product/{code}",
+            "products_search": "/products/{code}",
             "purchase": "/purchase",
             "transactions": "/transactions/{id}"
         }
     }
-
-
 
 @app.get("/products", response_model=List[schemas.Product])
 def get_all_products(db: Session = Depends(get_db)):
@@ -105,6 +109,11 @@ def get_product(code: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"❌ Error fetching product {code}: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/product/{code}", response_model=schemas.Product)
+def get_product_singular(code: str, db: Session = Depends(get_db)):
+    """フロントエンド互換性のための単数形エンドポイント"""
+    return get_product(code, db)
 
 @app.get("/transactions/{transaction_id}", response_model=schemas.TransactionDetailWithTotals)
 def get_transaction_details(transaction_id: int, db: Session = Depends(get_db)):
