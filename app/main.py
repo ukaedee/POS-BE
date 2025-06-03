@@ -1,6 +1,7 @@
 import logging
 import sys
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List
@@ -22,6 +23,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="POS API", description="POS Application Backend API")
+
+# CORS設定（フロントエンド接続用）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 本番環境では具体的なドメインを指定
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+logger.info("✅ CORS middleware enabled - all origins allowed")
 
 # 設定値
 TAX_RATE = 0.10  # 10%
