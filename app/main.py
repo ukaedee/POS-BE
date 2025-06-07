@@ -41,18 +41,19 @@ logger.info("✅ CORS middleware configured for frontend domain")
 
 # 設定値
 TAX_RATE = 0.10  # 10%
-DEFAULT_STORE_CD = "00001"  # デフォルト店舗コード
-DEFAULT_POS_NO = "001"      # デフォルトPOS番号
-DEFAULT_TAX_CD = "10"       # デフォルト税区分（10%）
-DEFAULT_EMP_CD = "9999999999"  # デフォルト従業員コード
+DEFAULT_STORE_CD = "30"         # デフォルト店舗コード（仕様に合わせて修正）
+DEFAULT_POS_NO = "90"           # デフォルトPOS番号（仕様に合わせて修正）
+DEFAULT_TAX_CD = "10"           # デフォルト税区分（10%）
+DEFAULT_EMP_CD = "9999999999"   # デフォルト従業員コード
 
 @app.on_event("startup")
 async def startup_event():
     logger.info("🚀 POS API is starting up...")
     logger.info("📋 Application configuration:")
     logger.info(f"  TAX_RATE: {TAX_RATE}")
-    logger.info(f"  DEFAULT_STORE_CD: {DEFAULT_STORE_CD}")
-    logger.info(f"  DEFAULT_POS_NO: {DEFAULT_POS_NO}")
+    logger.info(f"  DEFAULT_STORE_CD: {DEFAULT_STORE_CD} (fixed per specification)")
+    logger.info(f"  DEFAULT_POS_NO: {DEFAULT_POS_NO} (fixed per specification)")
+    logger.info(f"  DEFAULT_EMP_CD: {DEFAULT_EMP_CD}")
     
     # データベース接続テスト
     try:
@@ -191,8 +192,17 @@ def create_purchase(purchase_data: schemas.PurchaseRequest, db: Session = Depend
         logger.info(f"💳 Processing purchase for emp_cd: {purchase_data.emp_cd}")
         logger.info(f"📦 Items: {len(purchase_data.items)}")
         
-        # emp_cdのデフォルト値設定
-        emp_cd = purchase_data.emp_cd if purchase_data.emp_cd else DEFAULT_EMP_CD
+        # emp_cdの処理を強化（空文字、None、空白文字列をすべてデフォルト値に設定）
+        emp_cd = purchase_data.emp_cd
+        if not emp_cd or emp_cd.strip() == "":
+            emp_cd = DEFAULT_EMP_CD
+            logger.info(f"⚙️ Empty emp_cd detected, using default: {DEFAULT_EMP_CD}")
+        
+        # STORE_CDとPOS_NOは仕様に従って強制的に固定値を使用
+        store_cd = DEFAULT_STORE_CD  # 常に '30' を使用
+        pos_no = DEFAULT_POS_NO      # 常に '90' を使用
+        
+        logger.info(f"⚙️ Using fixed values: STORE_CD={store_cd}, POS_NO={pos_no}")
         
         # 商品情報取得と在庫チェック
         purchase_items = []
@@ -230,18 +240,18 @@ def create_purchase(purchase_data: schemas.PurchaseRequest, db: Session = Depend
 
         logger.info(f"💰 Calculated totals: excl_tax={total_amount_ex_tax}, tax={tax_amount}, incl_tax={total_amount}")
 
-        # 1. transactionヘッダを作成
+        # 1. transactionヘッダを作成（必須フィールドを確実に設定）
         db_transaction = models.Transaction(
-            EMP_CD=emp_cd,
-            STORE_CD=DEFAULT_STORE_CD,
-            POS_NO=DEFAULT_POS_NO,
-            TOTAL_AMT=total_amount,
-            TTL_AMT_EX_TAX=total_amount_ex_tax
+            EMP_CD=emp_cd,                    # デフォルト値が設定済み
+            STORE_CD=store_cd,                # 仕様通り '30' 固定
+            POS_NO=pos_no,                    # 仕様通り '90' 固定
+            TOTAL_AMT=total_amount,           # 税込金額
+            TTL_AMT_EX_TAX=total_amount_ex_tax  # 税抜金額を確実に保存
         )
         db.add(db_transaction)
         db.flush()  # TRD_IDを取得
 
-        logger.info(f"✅ Transaction created: TRD_ID={db_transaction.TRD_ID}")
+        logger.info(f"✅ Transaction created: TRD_ID={db_transaction.TRD_ID}, STORE_CD={db_transaction.STORE_CD}, POS_NO={db_transaction.POS_NO}")
 
         # 2. transaction_details明細を作成
         transaction_details = []
